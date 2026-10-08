@@ -1,3 +1,4 @@
+import { getLocalDateString } from '../../utils/date';
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import api from '../../services/api';
@@ -15,7 +16,7 @@ const BookAppointment = () => {
   const [schedules, setSchedules] = useState([]);
   const [formData, setFormData] = useState({
     doctorId: preselectedDoc,
-    appointmentDate: new Date().toISOString().split('T')[0],
+    appointmentDate: getLocalDateString(),
     priorityType: 'NORMAL',
     symptoms: '',
   });
@@ -36,10 +37,11 @@ const BookAppointment = () => {
           api.get('/doctors'),
           api.get('/appointments/my').catch(() => ({ data: [] })),
         ]);
-        setDoctors(doctorRes.data);
-        setMyAppointments(myApptRes.data || []);
-        if (!preselectedDoc && doctorRes.data.length > 0) {
-          setFormData((prev) => ({ ...prev, doctorId: doctorRes.data[0].id }));
+        const doctorList = Array.isArray(doctorRes.data) ? doctorRes.data : [];
+        setDoctors(doctorList);
+        setMyAppointments(Array.isArray(myApptRes.data) ? myApptRes.data : []);
+        if (!preselectedDoc && doctorList.length > 0) {
+          setFormData((prev) => ({ ...prev, doctorId: doctorList[0].id }));
         }
       } catch (err) {
         setError('Failed to load doctors list.');
@@ -57,12 +59,22 @@ const BookAppointment = () => {
       const fetchSchedules = async () => {
         try {
           const res = await api.get(`/schedules?doctorId=${formData.doctorId}`);
-          setSchedules(res.data);
-          // If current appointmentDate is not in schedules, select first available date
-          if (res.data.length > 0) {
-            const dateExists = res.data.some((s) => s.availableDate === formData.appointmentDate);
-            if (!dateExists) {
-              setFormData((prev) => ({ ...prev, appointmentDate: res.data[0].availableDate }));
+          const scheduleList = Array.isArray(res.data) ? res.data : [];
+          setSchedules(scheduleList);
+
+          // Prefer the currently selected date only when it is actually bookable.
+          // This prevents the booking page from opening on a cutoff/full shift.
+          if (scheduleList.length > 0) {
+            const current = scheduleList.find((s) => s.availableDate === formData.appointmentDate);
+            const currentIsBookable = current?.isBookingOpen === true && (current.remainingCapacity ?? 1) > 0;
+            const firstBookable = scheduleList.find((s) => s.isBookingOpen === true && (s.remainingCapacity ?? 1) > 0);
+            const firstFutureWithCapacity = scheduleList.find((s) => (s.remainingCapacity ?? 1) > 0);
+
+            if (!currentIsBookable) {
+              const nextSchedule = firstBookable || firstFutureWithCapacity;
+              if (nextSchedule) {
+                setFormData((prev) => ({ ...prev, appointmentDate: nextSchedule.availableDate }));
+              }
             }
           }
         } catch (err) {
@@ -89,9 +101,13 @@ const BookAppointment = () => {
   const isFull = activeSchedule && activeSchedule.bookedCount >= activeSchedule.maxAppointments;
   const remainingSlots = activeSchedule ? Math.max(0, activeSchedule.maxAppointments - activeSchedule.bookedCount) : 0;
   
-  // Cutoff calculation: 6 hours before schedule start time
+  // The backend is the source of truth for cutoff/capacity.
+  // Fall back to the old calculation only if an older backend omits isBookingOpen.
   const isCutoffPassed = (() => {
     if (!activeSchedule) return false;
+    if (typeof activeSchedule.isBookingOpen === 'boolean') {
+      return !activeSchedule.isBookingOpen && !isFull;
+    }
     const scheduleStartStr = `${activeSchedule.availableDate}T${activeSchedule.startTime}`;
     const scheduleStartTime = new Date(scheduleStartStr);
     const cutoffTime = new Date(scheduleStartTime.getTime() - 6 * 60 * 60 * 1000);
@@ -318,7 +334,7 @@ const BookAppointment = () => {
                 type="date"
                 name="appointmentDate"
                 className="form-control"
-                min={new Date().toISOString().split('T')[0]}
+                min={getLocalDateString()}
                 value={formData.appointmentDate}
                 onChange={handleChange}
                 required

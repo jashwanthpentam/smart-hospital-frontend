@@ -1,3 +1,4 @@
+import { getLocalDateString } from '../../utils/date';
 import React, { useState, useEffect } from 'react';
 import api from '../../services/api';
 import PageHeader from '../../components/PageHeader';
@@ -12,7 +13,7 @@ const DoctorSchedule = () => {
   const [success, setSuccess] = useState('');
 
   const [formData, setFormData] = useState({
-    availableDate: new Date().toISOString().split('T')[0],
+    availableDate: getLocalDateString(),
     startTime: '09:00',
     endTime: '17:00',
     maxAppointments: 15,
@@ -153,7 +154,7 @@ const DoctorSchedule = () => {
                 type="date"
                 name="availableDate"
                 className="form-control"
-                min={new Date().toISOString().split('T')[0]}
+                min={getLocalDateString()}
                 value={formData.availableDate}
                 onChange={handleChange}
                 required

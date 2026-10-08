@@ -1,3 +1,4 @@
+import { getLocalDateString } from '../../utils/date';
 import React, { useState, useEffect } from 'react';
 import api from '../../services/api';
 import PageHeader from '../../components/PageHeader';
@@ -8,7 +9,7 @@ import StatusBadge from '../../components/StatusBadge';
 import EmptyState from '../../components/EmptyState';
 
 const DoctorQueue = () => {
-  const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
+  const [selectedDate, setSelectedDate] = useState(getLocalDateString());
   const [queue, setQueue] = useState([]);
   const [activePatient, setActivePatient] = useState(null);
   const [nextPatient, setNextPatient] = useState(null);
